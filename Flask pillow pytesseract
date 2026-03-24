@@ -1,0 +1,77 @@
+from flask import Flask, request, render_template_string
+from PIL import Image
+import pytesseract
+
+app = Flask(__name__)
+
+# Seus critérios
+EV_LIMITE = 0.7      # 70%
+PROB_2T_LIMITE = 0.8 # 80%
+MIN_GOLS_HT = 1
+
+# HTML simples para upload e resultado
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EV+ Detector</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        input { margin: 10px 0; }
+        .resultado { margin-top: 20px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>EV+ Detector</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="screenshot" accept="image/*" required>
+        <br>
+        <button type="submit">Analisar</button>
+    </form>
+    {% if resultado %}
+    <div class="resultado">
+        <p>Minuto: {{resultado.minuto}}</p>
+        <p>Gols HT: {{resultado.gols_ht}}</p>
+        <p>Taxa EV: {{resultado.taxa_ev*100}}%</p>
+        <p>Probabilidade 2º tempo: {{resultado.prob_2t*100}}%</p>
+        <p><strong>{{resultado.resultado}}</strong></p>
+    </div>
+    {% endif %}
+</body>
+</html>
+"""
+
+def analisar_imagem(image_path):
+    # OCR simples da imagem
+    texto = pytesseract.image_to_string(Image.open(image_path))
+    
+    # Aqui você adapta para extrair os números do print
+    # Exemplo de valores fixos para teste:
+    minuto = 46           # substitua pelo parsing real do texto
+    gols_ht = 1           # substitua pelo parsing real
+    taxa_ev = 0.83        # substitua pelo parsing real
+    prob_2t = 0.82        # substitua pelo parsing real
+    
+    resultado = "❌ Não atende"
+    if gols_ht >= MIN_GOLS_HT and taxa_ev >= EV_LIMITE and prob_2t >= PROB_2T_LIMITE:
+        resultado = "⚡ EV+ detectado! Aposte agora!"
+    
+    return {
+        "minuto": minuto,
+        "gols_ht": gols_ht,
+        "taxa_ev": taxa_ev,
+        "prob_2t": prob_2t,
+        "resultado": resultado
+    }
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    resultado = None
+    if request.method == "POST":
+        file = request.files["screenshot"]
+        file.save("temp.png")
+        resultado = analisar_imagem("temp.png")
+    return render_template_string(HTML, resultado=resultado)
+
+if __name__ == "__main__":
+    app.run(debug=True)
